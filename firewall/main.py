@@ -25,6 +25,7 @@ import gevent.subprocess as sp
 import json
 import logging
 import sys
+import os
 
 from common.geventwrapper import gevent_spawn
 from common.logging import set_up_logging
@@ -179,8 +180,10 @@ def main():
     print('Running on Python %s' % sys.version)
 
     try:
-        udp_proxy_proc1 = sp.Popen('udpproxy.exe %d' % GAME_PORT1)
-        udp_proxy_proc2 = sp.Popen('udpproxy.exe %d' % GAME_PORT2)
+        wine64env = os.environ.copy()
+        wine64env['WINEPREFIX'] = '/home/tribes/.wine64'
+        udp_proxy_proc1 = sp.Popen('udpproxy.exe %d' % GAME_PORT1, env=wine64env)
+        udp_proxy_proc2 = sp.Popen('udpproxy.exe %d' % GAME_PORT2, env=wine64env)
 
     except OSError as e:
         print('Failed to run udpproxy.exe. Run download_udpproxy.py to download it\n'
