@@ -23,6 +23,8 @@ import gevent
 import json
 import logging
 
+import ipaddress
+
 from common.errors import FatalError
 from common.firewall import reset_firewall, modify_firewall
 from common.ipaddresspair import IPAddressPair
@@ -83,22 +85,33 @@ class Launcher:
         self.last_server_ready_message = None
         self.last_match_end_message = None
 
-        self.address_pair, errormsg = IPAddressPair.detect()
-
-        if not self.address_pair.external_ip:
-            self.logger.warning('Unable to detect public IP address: %s\n'
-                                'This will cause problems if the login server '
-                                'or any of your players are not on your LAN.' % errormsg)
+        detected_address_pair, errormsg = IPAddressPair.detect()
+        external_ip = game_server_config.get('external_ip', None)
+        if not external_ip:
+            external_ip = detected_address_pair.external_ip
+            if not external_ip:
+                self.logger.warning('Unable to detect public IP address: %s\n'
+                                    'This will cause problems if the login server '
+                                    'or any of your players are not on your LAN.' % errormsg)
+            self.logger.info('launcher: detected external IP: %s' % external_ip)
         else:
-            self.logger.info('launcher: detected external IP: %s' % self.address_pair.external_ip)
+            external_ip = ipaddress.IPv4Address(external_ip)
+            self.logger.info('launcher: configured external IP: %s' % external_ip)
 
-        if not self.address_pair.internal_ip:
-            self.logger.warning('You appear to be running the game server on a machine '
-                                'directly connected to the internet. This is will cause '
-                                'problems if the login server or any of your players '
-                                'are on your LAN.')
+        internal_ip = game_server_config.get('internal_ip', None)
+        if not internal_ip:
+            internal_ip = detected_address_pair.internal_ip
+            if not internal_ip:
+                self.logger.warning('You appear to be running the game server on a machine '
+                                    'directly connected to the internet. This is will cause '
+                                    'problems if the login server or any of your players '
+                                    'are on your LAN.')
+            self.logger.info('launcher: detected internal IP: %s' % internal_ip)
         else:
-            self.logger.info('launcher: detected internal IP: %s' % self.address_pair.internal_ip)
+            internal_ip = ipaddress.IPv4Address(internal_ip)
+            self.logger.info('launcher: configured internal IP: %s' % internal_ip)
+
+        self.address_pair = IPAddressPair(external_ip, internal_ip)
 
         self.message_handlers = {
             PeerConnectedMessage: self.handle_peer_connected,
