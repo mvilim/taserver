@@ -96,21 +96,18 @@ def inject(pid, path_to_dll):
             raise InjectionFailedError('Failed to initialize dbghelp dll')
 
         # Get the address of LoadLibraryA
-        MAX_SYM_NAME_LENGTH = 40
-        pBuffer = ctypes.create_string_buffer(sizeof(SYMBOL_INFO) + MAX_SYM_NAME_LENGTH)
-        pLoadLibrarySymInfo = cast(pBuffer, POINTER(SYMBOL_INFO))
-        pLoadLibrarySymInfo.contents.SizeOfStruct = sizeof(SYMBOL_INFO)
-        pLoadLibrarySymInfo.contents.MaxNameLen = MAX_SYM_NAME_LENGTH
+        GetModuleHandleA = kernel32.GetModuleHandleA
+        GetModuleHandleA.argtypes = [LPCSTR]
+        GetModuleHandleA.restype = HMODULE
 
-        dbghelp.SymFromName.argtypes = [HANDLE, LPCSTR, POINTER(SYMBOL_INFO)]
-        dbghelp.SymFromName.restype = BOOL
-        if not dbghelp.SymFromName(process_handle, 'LoadLibraryA'.encode('ascii'), pLoadLibrarySymInfo):
-            raise InjectionFailedError('Failed to get symbol info for LoadLibraryA function')
+        GetProcAddress = kernel32.GetProcAddress
+        GetProcAddress.argtypes = [HMODULE, LPCSTR]
+        GetProcAddress.restype = c_void_p
 
-        dbghelp.SymCleanup.argtypes = [HANDLE]
-        dbghelp.SymCleanup.restype = BOOL
-        if not dbghelp.SymCleanup(process_handle):
-            raise InjectionFailedError('Failed to cleanup after use of dbghelp dll')
+        h_kernel32 = GetModuleHandleA('kernel32'.encode('ascii'))
+        loadliba_address = GetProcAddress(h_kernel32, 'LoadLibraryA'.encode('ascii'))
+        if not loadliba_address:
+            raise InjectionFailedError('Failed to get address of LoadLibraryA')
 
         # Allocate memory in the process for the DLL path, and then write it there
         path_to_dll_bytes = path_to_dll.encode('ascii') + b'\0'
@@ -138,7 +135,7 @@ def inject(pid, path_to_dll):
         remote_thread = CreateRemoteThreadFunc(process_handle,
                                                None,
                                                0,
-                                               pLoadLibrarySymInfo.contents.Address,
+                                               loadliba_address,
                                                remote_path_space,
                                                0,
                                                None)
